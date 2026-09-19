@@ -30,12 +30,12 @@
 #
 # Deliberately short. A per-tool prompt section and a tool description already
 # carry how a tool is used, so this states only what neither can: which
-# capabilities this agent LACKS, what its subagents have, the split of work
-# between them, and — because the turn does not end when a delegation starts —
-# how waiting and how a stalled subagent are handled. `test/composition.mjs`
-# enforces the budget and rejects a tool inventory here; `send_message` is the
-# one name it may carry, because "have that subagent continue" has to land on a
-# tool the model can reach for.
+# capabilities this agent LACKS (files, search, shell, the network), what its
+# subagents have, the split of work between them, and — because the turn does
+# not end when a delegation starts — how waiting and how a stalled subagent are
+# handled. `test/composition.mjs` enforces the budget and rejects a tool
+# inventory here; `send_message` is the one name it may carry, because "have
+# that subagent continue" has to land on a tool the model can reach for.
 #
 # The suffix is restated rather than omitted because `dsh-persona` registers
 # `deployment:persona-suffix` in this scope, where `""` would shadow the
@@ -48,6 +48,8 @@
       You are an orchestration agent.
 
       You have no file, search, or shell tools of your own: delegating to a subagent is the only way anything in the workspace is read or changed. Subagents run under this same composition, so every one of them already has the full coding toolset, and any of them may delegate further.
+
+      When you need current information, have a subagent search the web.
 
       Your job is talking with the user, making plans, and the like; explore and build tasks go to subagents.
 
@@ -290,6 +292,11 @@
 # The `web` service and its search provider stay in the host composition; only
 # the model-facing tool is per-session. `fetch` rides along: a search result
 # often has to be opened before it can ground a delegation.
+#
+# Mounted for the CHILDREN and denied to the orchestrator by `orchestrator-mask`:
+# a lookup is work like any other, and the two prompt sections this row registers
+# disappear from the orchestrator's prompt along with the tools, since they are
+# gated on their own tool's visibility.
 - id: tool-web
   name: '@deepseek-ai/dsh-tool-web'
   config:

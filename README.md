@@ -1,9 +1,9 @@
 # dsh-simple-orchestrator
 
 An agent preset for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-whose top-level agent **cannot touch code**: it reads skills, asks the user,
-searches the web, tracks progress, and delegates — and every subagent it starts
-gets the complete coding toolset.
+whose top-level agent **cannot touch code or the network**: it reads skills, asks
+the user, tracks progress, and delegates — and every subagent it starts gets the
+complete coding toolset, web search included.
 
 The preset's display name is **编排模式** and its id is `dsh-simple-orchestrator`.
 
@@ -11,10 +11,11 @@ The preset's display name is **编排模式** and its id is `dsh-simple-orchestr
 
 Delegation is the point, not an implementation detail:
 
-- The orchestrator owns no file and no shell tool. `read`, `write`, `edit`,
-  `read_image`, `glob`, `grep`, `bash`, and `pwsh` are not in its catalog, so a
-  session on this preset cannot "just quickly look" — it has to say what it wants
-  and hand that to a worker.
+- The orchestrator owns no file, shell, or network tool. `read`, `write`, `edit`,
+  `read_image`, `glob`, `grep`, `bash`, `pwsh`, `web_search`, and `web_fetch` are
+  not in its catalog, so a session on this preset cannot "just quickly look" —
+  not in the workspace and not on the web. It has to say what it wants and hand
+  that to a worker.
 - Every worker is a full coding agent: it inherits this preset's composition,
   which mounts the complete toolset, and it may delegate further (depth ≤ 3).
 - Waiting is free. The orchestrator does not hold a turn open for its workers: a
@@ -75,7 +76,6 @@ shows up without a restart.
 | --- | --- |
 | `skill` | load task instructions from the skill catalog |
 | `ask_user_question` | decisions belong to the user |
-| `web_search`, `web_fetch` | facts from outside the workspace |
 | `todo_write` | multi-step delegation needs a visible plan |
 | `exit_plan_mode` | approval gate before work starts |
 | `get_goal`, `create_goal`, `update_goal` | work that spans several turns |
@@ -86,7 +86,14 @@ shows up without a restart.
 | `workflow`, `ralph` | fan-out and fresh-agent iteration |
 
 **Denied** — removed from the orchestrator alone:
-`read`, `write`, `edit`, `read_image`, `glob`, `grep`, `bash`, `pwsh`.
+`read`, `write`, `edit`, `read_image`, `glob`, `grep`, `bash`, `pwsh`,
+`web_search`, `web_fetch`.
+
+The network is denied for the same reason the filesystem is: a lookup is work, and
+work belongs to a subagent. So a fact from outside the workspace arrives the same
+way a file's contents do — quoted from a worker. The two web prompt sections are
+registered per tool and gated on their own tool's visibility, so denying the pair
+also drops them from the orchestrator's prompt.
 
 Workers see the union of both lists; the composition is their ceiling. Two tool
 names are deliberately not part of the mask's business: `subagent`,
@@ -114,10 +121,11 @@ for the rejected alternatives, and
 for why the mask travels inside the preset directory.
 
 The persona is deliberately short, and stays that way: it states only what no
-tool description can — the capabilities the orchestrator lacks, the full toolset
-its workers have, how the two split the work, and how waiting and a stalled
-worker are handled — because how a tool is used, what its parameters are, and
-when to call it belong to that tool's own description and prompt section.
+tool description can — the capabilities the orchestrator lacks (files, search,
+shell, the network), the full toolset its workers have, that a lookup goes to a
+subagent like any other work, how the two split the work, and how waiting and a
+stalled worker are handled — because how a tool is used, what its parameters are,
+and when to call it belong to that tool's own description and prompt section.
 `send_message` is the single tool name it carries, since "have that subagent
 continue" has to land on a tool the model can reach for. `test/composition.mjs`
 enforces the budget and rejects any other tool inventory.

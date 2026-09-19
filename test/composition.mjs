@@ -22,10 +22,11 @@ const presetDir = join(repoRoot, 'presets', PRESET_ID);
 const compositionPath = join(presetDir, 'agent.cordis.yml');
 
 /**
- * Tools the orchestrator KEEPS visible. Everything here is either one of the
- * four capabilities the preset is for (skills, the user, the web, delegation) or
- * a control-plane tool the user asked to keep (progress, plan approval, goals,
- * deliverables, background-job handling).
+ * Tools the orchestrator KEEPS visible. Everything here is either a capability
+ * the preset is for (skills, the user, delegation) or a control-plane tool the
+ * user asked to keep (progress, plan approval, goals, deliverables,
+ * background-job handling). The web is NOT here: a lookup is work, and work
+ * belongs to a subagent.
  */
 const KEEP = [
   'ask_user_question',
@@ -46,8 +47,6 @@ const KEEP = [
   'subagent_fork',
   'todo_write',
   'update_goal',
-  'web_fetch',
-  'web_search',
   'workflow',
 ];
 
@@ -148,9 +147,11 @@ assert.equal(maskName, 'orchestrator-mask', 'mask.js advertises the plugin name 
 assert.equal(PRESET_ID, basename(presetDir), 'mask.js PRESET_ID must equal the preset directory name (the roster id)');
 assert.ok(!KEEP.some((tool) => DENY.includes(tool)), 'KEEP and DENY must not overlap');
 assert.deepEqual(
-  ['read', 'write', 'edit', 'read_image', 'glob', 'grep', 'bash', 'pwsh'].filter((tool) => !DENY.includes(tool)),
+  ['read', 'write', 'edit', 'read_image', 'glob', 'grep', 'bash', 'pwsh', 'web_search', 'web_fetch'].filter(
+    (tool) => !DENY.includes(tool),
+  ),
   [],
-  'the mask must deny every file and shell tool',
+  'the mask must deny every file, shell, and network tool',
 );
 
 // ── the tool-parity contract ────────────────────────────────────────────────
@@ -237,6 +238,7 @@ assert.equal(
 const personaPrefix = String(persona.config?.prefix);
 assert.match(personaPrefix, /no file, search, or shell tools/i, 'the persona must state the capabilities the orchestrator lacks');
 assert.match(personaPrefix, /full coding toolset/i, 'the persona must state that its subagents do have them');
+assert.match(personaPrefix, /have a subagent search the web/i, 'the persona must route lookups to a subagent, since the web tools are denied to it');
 assert.match(personaPrefix, /explore and build tasks go to subagents/i, 'the persona must state how work is split with those subagents');
 assert.match(personaPrefix, /end your turn/i, 'the persona must say that waiting does not require holding the turn open');
 assert.ok(

@@ -1,6 +1,6 @@
 /**
- * The orchestrator's tool mask: deny the code and shell tools to the TOP-LEVEL
- * agent of this preset, and to nothing else.
+ * The orchestrator's tool mask: deny the code, shell, and network tools to the
+ * TOP-LEVEL agent of this preset, and to nothing else.
  *
  * Why this exists at all is in `agent.cordis.yml` beside this file and in
  * docs/adr/0001: a child agent joins its parent's composition and a child's
@@ -23,9 +23,9 @@
  *    rejects a name it does not know — `pwsh` is absent on POSIX, and a future
  *    harness may rename a tool — and it rejects it BEFORE recording anything, so
  *    a failed call leaves no partial restriction behind. A single call naming
- *    all eight tools would fail whole on one absent name and leave the
- *    orchestrator unmasked, which is the one outcome this file must not produce
- *    silently; hence the per-name `catch` plus the warning when nothing landed.
+ *    every tool would fail whole on one absent name and leave the orchestrator
+ *    unmasked, which is the one outcome this file must not produce silently;
+ *    hence the per-name `catch` plus the warning when nothing landed.
  *
  * 3. IDEMPOTENCE BEFORE THE RESTRICTION, NOT AFTER. `restrict()` emits
  *    `tools/change`, which is also how a preset switch (which re-links an
@@ -53,7 +53,12 @@ export const PRESET_ID = 'dsh-simple-orchestrator';
 
 /**
  * The tools the top-level orchestrator must never see: everything that can read
- * a file, write a file, or run a command.
+ * a file, write a file, run a command, or reach the network.
+ *
+ * The network tools are here because a lookup is work like any other: the
+ * orchestrator asks a subagent for facts from outside the workspace instead of
+ * fetching them itself, which also keeps the two web prompt sections (registered
+ * per tool, and gated on that tool's visibility) out of its prompt.
  *
  * Every other tool this composition mounts is deliberately KEPT visible, and
  * `test/composition.mjs` holds the other half of that contract — it fails when a
@@ -69,6 +74,8 @@ export const DENY = [
   'grep',
   'bash',
   'pwsh',
+  'web_search',
+  'web_fetch',
 ];
 
 /**
