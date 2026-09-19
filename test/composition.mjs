@@ -190,6 +190,13 @@ for (const tool of expected) {
 // ── the persona: deployment context, kept short ─────────────────────────────
 
 /**
+ * Tool the persona names on purpose: "have that subagent continue" has to land
+ * on a name the model can reach for, and it is the only reference the text
+ * carries.
+ */
+const PERSONA_MAY_NAME = ['send_message'];
+
+/**
  * Tool identifiers the persona must never name. Each one is already defined —
  * usage, parameters, and when to call it — by its own tool description and by
  * the prompt section the tool's row registers, so repeating it here only makes
@@ -213,7 +220,6 @@ const TOOL_IDENTIFIERS = [
   'list_subagent_models',
   'pwsh',
   'read_image',
-  'send_message',
   'subagent_fork',
   'todo_write',
   'update_goal',
@@ -231,13 +237,17 @@ assert.equal(
 const personaPrefix = String(persona.config?.prefix);
 assert.match(personaPrefix, /no file, search, or shell tools/i, 'the persona must state the capabilities the orchestrator lacks');
 assert.match(personaPrefix, /full coding toolset/i, 'the persona must state that its subagents do have them');
-assert.match(personaPrefix, /Report only what/i, 'the persona must state the reporting rule that keeps claims honest');
+assert.match(personaPrefix, /explore and build tasks go to subagents/i, 'the persona must state how work is split with those subagents');
+assert.match(personaPrefix, /end your turn/i, 'the persona must say that waiting does not require holding the turn open');
 assert.ok(
-  personaPrefix.length <= 600,
+  personaPrefix.length <= 900,
   `the persona prefix is ${personaPrefix.length} characters: it may state only what a tool description cannot, since the harness owns per-tool guidance`,
 );
 for (const identifier of TOOL_IDENTIFIERS) {
   assert.ok(!personaPrefix.includes(identifier), `the persona names "${identifier}", which that tool's own description already covers`);
+}
+for (const identifier of PERSONA_MAY_NAME) {
+  assert.ok(personaPrefix.includes(identifier), `"${identifier}" is exempt from the ban above, so the persona is expected to name it`);
 }
 assert.match(String(persona.config?.suffix), /\{\{cwd\}\}/, 'the persona keeps the working-directory suffix');
 

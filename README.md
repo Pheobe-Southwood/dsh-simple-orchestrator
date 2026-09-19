@@ -17,9 +17,10 @@ Delegation is the point, not an implementation detail:
   and hand that to a worker.
 - Every worker is a full coding agent: it inherits this preset's composition,
   which mounts the complete toolset, and it may delegate further (depth ≤ 3).
-- The orchestrator is the only part of the tree that cannot verify by reading, so
-  the preset's persona makes reporting the evidence: quote the subagent, never
-  claim a file says something nobody read.
+- Waiting is free. The orchestrator does not hold a turn open for its workers: a
+  settled subagent wakes the session, so a delegation round-trip costs no
+  polling. A worker that stalls or hands back a half-finished result is nudged
+  with a message rather than started over.
 
 ## Install
 
@@ -112,14 +113,14 @@ for the rejected alternatives, and
 [docs/adr/0002](docs/adr/0002-bundle-ships-the-preset-the-preset-ships-the-mask.md)
 for why the mask travels inside the preset directory.
 
-The persona is deliberately short, and stays that way: it states only the three
-things no tool description can — the capabilities the orchestrator lacks, the
-full toolset its workers have, and the rule that it may report only what a
-subagent or a tool actually returned. How a tool is used, what its parameters
-are, and when to call it belong to that tool's own description and prompt
-section, so repeating them here would only create a second copy free to drift.
-`test/composition.mjs` enforces the budget and rejects a tool inventory in the
-persona.
+The persona is deliberately short, and stays that way: it states only what no
+tool description can — the capabilities the orchestrator lacks, the full toolset
+its workers have, how the two split the work, and how waiting and a stalled
+worker are handled — because how a tool is used, what its parameters are, and
+when to call it belong to that tool's own description and prompt section.
+`send_message` is the single tool name it carries, since "have that subagent
+continue" has to land on a tool the model can reach for. `test/composition.mjs`
+enforces the budget and rejects any other tool inventory.
 
 ## Verify
 
