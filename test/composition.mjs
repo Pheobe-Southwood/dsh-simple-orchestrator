@@ -187,7 +187,39 @@ for (const tool of expected) {
   assert.ok(mountedTools.has(tool), `"${tool}" is claimed but no mounted row registers it — the lists have drifted`);
 }
 
-// ── the persona keeps the deployment context ────────────────────────────────
+// ── the persona: deployment context, kept short ─────────────────────────────
+
+/**
+ * Tool identifiers the persona must never name. Each one is already defined —
+ * usage, parameters, and when to call it — by its own tool description and by
+ * the prompt section the tool's row registers, so repeating it here only makes
+ * the prompt longer and the two copies free to drift. Only identifiers that
+ * cannot occur in ordinary prose are listed: `read`, `write`, `workflow`, and
+ * `present` are English words too, and the character budget below covers those.
+ */
+const TOOL_IDENTIFIERS = [
+  'ask_user_question',
+  'bash',
+  'create_goal',
+  'exit_plan_mode',
+  'get_goal',
+  'glob',
+  'grep',
+  'interrupt_agent',
+  'job_kill',
+  'job_list',
+  'job_output',
+  'list_agents',
+  'list_subagent_models',
+  'pwsh',
+  'read_image',
+  'send_message',
+  'subagent_fork',
+  'todo_write',
+  'update_goal',
+  'web_fetch',
+  'web_search',
+];
 
 const persona = byId.get('persona');
 assert.equal(persona.config?.complete, undefined, 'the orchestrator needs the deployment prompt sections: never set `complete: true`');
@@ -196,7 +228,17 @@ assert.equal(
   undefined,
   'the runtime context (workspace, skills, delegation guidance) must stay on for this preset',
 );
-assert.match(String(persona.config?.prefix), /no file tools and no shell/i, 'the persona must state the orchestrator has no code tools');
+const personaPrefix = String(persona.config?.prefix);
+assert.match(personaPrefix, /no file, search, or shell tools/i, 'the persona must state the capabilities the orchestrator lacks');
+assert.match(personaPrefix, /full coding toolset/i, 'the persona must state that its subagents do have them');
+assert.match(personaPrefix, /Report only what/i, 'the persona must state the reporting rule that keeps claims honest');
+assert.ok(
+  personaPrefix.length <= 600,
+  `the persona prefix is ${personaPrefix.length} characters: it may state only what a tool description cannot, since the harness owns per-tool guidance`,
+);
+for (const identifier of TOOL_IDENTIFIERS) {
+  assert.ok(!personaPrefix.includes(identifier), `the persona names "${identifier}", which that tool's own description already covers`);
+}
 assert.match(String(persona.config?.suffix), /\{\{cwd\}\}/, 'the persona keeps the working-directory suffix');
 
 // ── display metadata ────────────────────────────────────────────────────────

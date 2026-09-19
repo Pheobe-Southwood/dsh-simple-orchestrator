@@ -112,6 +112,15 @@ for the rejected alternatives, and
 [docs/adr/0002](docs/adr/0002-bundle-ships-the-preset-the-preset-ships-the-mask.md)
 for why the mask travels inside the preset directory.
 
+The persona is deliberately short, and stays that way: it states only the three
+things no tool description can — the capabilities the orchestrator lacks, the
+full toolset its workers have, and the rule that it may report only what a
+subagent or a tool actually returned. How a tool is used, what its parameters
+are, and when to call it belong to that tool's own description and prompt
+section, so repeating them here would only create a second copy free to drift.
+`test/composition.mjs` enforces the budget and rejects a tool inventory in the
+persona.
+
 ## Verify
 
 ```sh
