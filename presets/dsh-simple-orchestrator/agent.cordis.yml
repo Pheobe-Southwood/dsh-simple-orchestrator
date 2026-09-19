@@ -1,0 +1,287 @@
+# The `dsh-simple-orchestrator` agent preset: an orchestrator that owns no code
+# tools of its own.
+#
+# This file is an AGENT-PLANE composition, copied from the shipped `standard`
+# preset and then edited (the layer has no patch semantics; `cordis` and `ptc`
+# accept the same cost). The roster mounts it ONCE under a standing scope and
+# every session naming it joins by scope parentage.
+#
+# Why the full toolset is mounted even though the top-level agent must not have
+# it: a child agent JOINS ITS PARENT'S COMPOSITION (`applyChildComposition` in
+# `@deepseek-ai/dsh-subagent`) and a child's `toolFilter` can only REMOVE
+# inherited tools, never add one. A composition that omitted `tool-fs` would
+# therefore produce blind children too — the opposite of the intent. So this
+# file mounts the complete coding toolset as the CHILDREN's ceiling, and the
+# `orchestrator-mask` row below denies the code and shell tools to the
+# top-level agent only, through the public `tools.restrict()` API. See
+# docs/adr/0001 and docs/adr/0002.
+#
+# A service row here MUST sit inside a group carrying an `isolate` realm.
+# Without one it publishes into the root realm, where it is process-global —
+# another preset publishing the same name collides, and a host reader would
+# resolve one preset's instance for every session; `dsh-agent-presets` rejects
+# that at mount. `true` means an entry-local realm: this standing mount's own
+# private instance, apart from every other preset's.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# The preset's own persona, shadowing the deployment default for this agent.
+# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    suffix: Your working directory is {{cwd}}.
+    prefix: |-
+      You are an orchestration agent powered by the {{model}} model, running on the DeepSeek Harness.
+
+      You have no file tools and no shell. You cannot read, search, edit, or execute code yourself: `read`, `write`, `edit`, `read_image`, `glob`, `grep`, `bash`, and `pwsh` are not in your toolset, and delegating to a subagent is the only way anything in the workspace changes.
+
+      What you DO have: `skill` (load task instructions), `ask_user_question` (ask the user), `web_search` and `web_fetch` (facts from outside the workspace), `todo_write`, plan mode (`exit_plan_mode`), the goal tools, `present`, the background-job controls (`job_output`, `job_list`, `job_kill`), the delegation tools (`subagent`, `subagent_fork`, `send_message`, `interrupt_agent`, `list_agents`), and the `workflow` and `ralph` orchestrators.
+
+      Every piece of code work is delegated. Use `subagent` for one-shot and parallel work, and start independent delegations together in one assistant message; use `subagent_fork` when the child should inherit this conversation's prefix. A subagent runs under this same composition, so it already has the full coding toolset — file reads and writes, search, and shell — and may delegate further. It cannot see this conversation unless you fork it, so a delegation prompt must be self-contained: the goal, the workspace path, the exact files or commands of interest, and what to report back.
+
+      Report only what a subagent or a tool actually returned. Never state the contents of a file you have not been told about, and never claim an edit happened unless a subagent said so. When a decision belongs to the user, ask with `ask_user_question` instead of guessing; when a plan needs approval before work starts, use plan mode.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+# Mounted for the CHILDREN and denied to the orchestrator by `orchestrator-mask`.
+#
+# `shell-env` stays in the HOST composition: `apps/cli/src/web.ts` injects it to
+# publish `DSH_WEB_URL`/`DSH_WEB_MODE`, and a host row that injects a service is
+# the criterion for host-plane ownership — injection resolves before any session
+# exists, so there is no agent to key by. Behind a preset realm those variables
+# never reached the model's shell at all. Both shell tools consume the host
+# registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
+# host-plane too.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Mounted for the CHILDREN and denied to the orchestrator by `orchestrator-mask`.
+# Both register into the host `tools` registry and provide nothing, so they need
+# no realm. The `fs` service and its policy stay in the host.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── background jobs ────────────────────────────────────────────────────────
+
+# Only the model-facing controls. The task REGISTRY stays on the host plane:
+# its producers sit outside any realm this file could put it in — `tool-bash`
+# above resolves it with `ctx.get`, and an entry-local realm here is invisible
+# to every sibling row, so `run_in_background` would answer "background jobs
+# unavailable" while these controls sat in the catalog. The registry is keyed by
+# owning agent anyway, so one host instance serves every session. The
+# orchestrator KEEPS these: they are how a background delegation is collected or
+# stopped.
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# The skill REGISTRY lives in the host composition and is layered per scope:
+# these rows register into THIS preset's layer of it, so they need no realm.
+# `skill-filesystem` contributes local-root discovery for agents on this preset
+# (deliberately WITHOUT `customSkillDirs`, so the default roots — the user's
+# `<dshHome>/skills`, project `.dsh/skills` and `.agents/skills` — keep
+# working), and `tool-skill` gives them the catalog and loader; the merged
+# catalog also carries whatever the deployment registered globally.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── goals ───────────────────────────────────────────────────────────────────
+
+# The goal service and session driver stay on the host plane, where the Gateway
+# can resolve them. The human command and model-facing tool register into this
+# preset's scoped layers. The orchestrator keeps the goal tools.
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── plan mode ───────────────────────────────────────────────────────────────
+
+# Plan state is per-agent by nature, so an entry-local realm is not a
+# workaround here — it is the correct lifetime. The orchestrator keeps
+# `exit_plan_mode`, which is the approval gate in front of a delegation plan.
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+              Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+              On this preset you cannot read the repository yourself, so exploration IS delegation: send subagents to read, search, and report, and quote their findings in the plan. Use ask_user_question only for user-owned choices or material ambiguity that delegation cannot answer.
+
+              Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Say which subagent work each step will be delegated as, and note anything a worker must decide for itself.
+
+              When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+# `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must
+# share this realm rather than sit outside it. Delegation round-trips make long
+# transcripts, so the orchestrator keeps compaction.
+#
+# `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST
+# plane, and the rows here resolve that one instance.
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+# The `subagents` registry and its spawn/fork backends live in the HOST
+# composition: the registry is a process singleton whose cross-session queries
+# the api-proxy serves to the browser, and a provider name may only be
+# registered once. This preset contributes the delegation TOOLS, which resolve
+# that host registry.
+#
+# `workflows` is different — nothing outside an agent reads it — so every row
+# that reaches it shares one entry-local realm here, and a consumer left
+# outside would resolve a host registry this preset does not populate.
+#
+# `maxDepth` is deliberately unset on the in-process rows, so the provider keeps
+# its default cap of 3: a worker may delegate further, and every descendant of
+# this preset is a subagent (depth > 0) that the mask above does not touch.
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        modelSelectionSettings: true
+        backgroundMode: continuable
+
+    # Fork omits model selection so provider/model stay equal to the parent and
+    # the inherited history remains eligible for KV Cache reuse. This preset
+    # keeps fork continuable; parent and child inherit the same messaging tool,
+    # while the parent id and return guidance follow the inherited history.
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+    # Production dsh does not install these optional providers. Install the
+    # matching Bundle in this Profile and restart the Host, then remove
+    # `disabled` from the matching tool row. Host availability alone grants no
+    # tool.
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── the orchestrator's tool mask ────────────────────────────────────────────
+
+# Sits loose: it publishes no service and injects none, so it needs no realm and
+# `inactiveRows` finds it active immediately. The file travels with this preset
+# (`./mask.js` resolves against the composition's own directory), so the preset
+# is self-contained: copying this directory alone still yields a masked
+# orchestrator. It has NO imports, which is what keeps that true when the
+# directory sits under the harness home instead of the profile's `node_modules`.
+- id: orchestrator-mask
+  name: ./mask.js
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# The `web` service and its search provider stay in the host composition; only
+# the model-facing tool is per-session. `fetch` rides along: a search result
+# often has to be opened before it can ground a delegation.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+
+- id: present
+  name: '@deepseek-ai/dsh-tool-present'

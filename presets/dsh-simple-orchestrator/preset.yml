@@ -1,0 +1,2 @@
+name: 编排模式
+description: 主 Agent 不读写代码，只读 skill、提问、联网搜索与委派子代理。

@@ -1,0 +1,51 @@
+{
+  "name": "dsh-simple-orchestrator",
+  "description": "The 编排模式 agent preset for the DeepSeek Harness: a top-level agent with no file or shell tools of its own — skill reading, user questions, web search and fetch, and the full delegation surface — while every subagent it starts inherits the complete coding toolset",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pheobe-Southwood/dsh-simple-orchestrator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Pheobe-Southwood/dsh-simple-orchestrator/issues"
+  },
+  "homepage": "https://github.com/Pheobe-Southwood/dsh-simple-orchestrator#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "agent-preset",
+    "orchestrator",
+    "subagent",
+    "cordis"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "presets",
+    "README.md",
+    "CONTEXT.md",
+    "docs",
+    "LICENSE"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node test/run.js",
+    "check": "npm run lint && npm test",
+    "prepublishOnly": "npm run check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
+    "js-yaml": "^4.1.0"
+  }
+}

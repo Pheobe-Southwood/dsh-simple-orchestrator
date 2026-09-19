@@ -1,0 +1,46 @@
+# The dsh-simple-orchestrator bundle patch: one layer, applied when a profile
+# lists this package in its `dsh.profile.bundles`.
+#
+# `dsh plugin --profile <name> add <spec>` maintains that list automatically —
+# the reconcile step in the dsh CLI appends every dependency whose manifest
+# declares `dsh.bundle` — so this file is the only wiring an installation needs.
+# Nobody hand-edits a profile patch to get the preset.
+#
+# WHAT IT DOES: the preset itself is a directory of YAML beside this package
+# (`presets/dsh-simple-orchestrator/`), and the roster only scans the roots it is
+# told about. This layer adds that directory as one more root.
+#
+# HOW THE PATH IS DERIVED, and why it is not a package name: a root takes a
+# filesystem path, with a leading `~` expanded and nothing else. `baseUrl` is the
+# one base a patch layer can see — the Loader anchors it at the PROFILE DIRECTORY
+# (the profile's `cordis.yml` exists on disk only so a real include root can
+# anchor it there), and `dsh plugin add` materializes every dependency under that
+# same directory's `node_modules`. So the expression below resolves to the
+# installed copy of this package, whichever version the profile holds; the
+# `process.getBuiltinModule('node:url')` indirection is the shipped `cordis`
+# preset's own idiom for reaching a Node builtin from inside a `!!js` expression
+# (it is `with (ctx) { … }`, so only `ctx`'s properties plus real globals are in
+# scope).
+#
+# A patch replaces the targeted row's WHOLE `config`, which is why the row below
+# restates every key the deployment's Web layer sets on it: `default` (unchanged
+# — STANDARD, not this preset, stays the default for new sessions),
+# `includeShippedRoot`, `includeUserRoot`, and `roots`. `trust: system` records
+# that this root belongs to the deployment's own bundle rather than to a person
+# editing `<dshHome>/.agent-presets`, so the preset is not offered for deletion
+# in the UI while an upgrade keeps it current.
+#
+# KNOWN COST, recorded in docs/adr/0002: a later bundle layer that patches the
+# same row would replace this config and take our root with it. The profile's own
+# `cordis.patch.yml` and the home-level `$DSH_HOME/cordis.patch.yml` are applied
+# AFTER every bundle layer, so a user override always wins — including one that
+# restores our root alongside a default change.
+
+- id: agent-presets
+  config:
+    default: standard
+    includeShippedRoot: true
+    includeUserRoot: true
+    roots:
+      - path: !!js process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-simple-orchestrator/presets/', baseUrl))
+        trust: system
