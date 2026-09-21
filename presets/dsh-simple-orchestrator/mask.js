@@ -81,13 +81,30 @@ export const DENY = [
 /**
  * Mask every top-level agent of this preset, now and as they appear.
  *
- * @param ctx - this row's context, inside the preset's standing mount. The
- *   mount's listeners receive the events of the agents JOINED to it, which is
- *   what makes the `agent/created` path safe without a roster lookup.
+ * `agent/created` is a HOST-WIDE announcement — the agent registry dispatches it
+ * through the events bus, and it reaches this row for every agent published in
+ * the process, whatever preset it runs. The roster, not the event, decides who
+ * is one of ours: `composedPreset(agent.ctx)` reads the live scope chain, and an
+ * agent of any other preset (or one not composed yet, or a deployment with no
+ * roster at all) is left untouched. Failing open here is the safe direction — a
+ * miss on our own preset is caught by the `tools/change` reconcile below, while
+ * a wrongly masked session of another preset has no one to correct it.
+ *
+ * @param ctx - this row's context, inside the preset's standing mount.
  */
 export function apply(ctx) {
   /** Agents already handled, so a repeated event never re-restricts one. */
   const masked = new WeakSet();
+
+  /** The preset an agent currently runs, from the live scope chain. */
+  const presetOf = (agent) => {
+    try {
+      return ctx.get('agentPresets')?.composedPreset(agent.ctx);
+    } catch {
+      // Not composed yet, or no roster in this deployment: not ours to touch.
+      return undefined;
+    }
+  };
 
   /**
    * Install the deny restriction on one agent the first time it is seen.
@@ -100,6 +117,8 @@ export function apply(ctx) {
     // worker, and a ralph round) carries `origin: 'subagent'` in its durable
     // creation header and keeps the full toolset.
     if (agent.session?.header?.origin === 'subagent') return;
+    // And only if the roster says this top-level agent runs THIS preset.
+    if (presetOf(agent) !== PRESET_ID) return;
     masked.add(agent);
     try {
       agent.ctx.inject(['tools'], (runtimeCtx) => {
@@ -128,11 +147,13 @@ export function apply(ctx) {
   };
 
   /**
-   * Catch agents that were composed BEFORE this row applied — the preset switch
-   * case: `agentPresets.recompose()` re-links an existing agent's scope and
-   * emits `tools/change` instead of creating one, so no `agent/created` fires.
-   * The roster answers "which preset is this agent running" from the live scope
-   * chain, which is what keeps other presets' sessions out of this loop.
+   * Catch agents this row missed at creation — an agent composed after its
+   * announcement, or the preset switch: `agentPresets.recompose()` re-links an
+   * existing agent's scope and emits `tools/change` instead of creating one, so
+   * no `agent/created` fires. `tools/change` is emitted whenever a scope gains
+   * its first tool layer, so a freshly composed session announces itself here
+   * too. The roster answers "which preset is this agent running" from the live
+   * scope chain, which is what keeps other presets' sessions out of this loop.
    */
   const reconcile = () => {
     const agents = ctx.get('agents');

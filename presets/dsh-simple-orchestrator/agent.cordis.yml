@@ -12,8 +12,10 @@
 # inherited tools, never add one. A composition that omitted `tool-fs` would
 # therefore produce blind children too — the opposite of the intent. So this
 # file mounts the complete coding toolset as the CHILDREN's ceiling, and the
-# `orchestrator-mask` row below denies the code and shell tools to the
-# top-level agent only, through the public `tools.restrict()` API. See
+# `orchestrator-mask` row below denies the code, shell, and network tools to the
+# top-level agent only, through the public `tools.restrict()` API — after asking
+# the roster that the agent really is one of ours, because `agent/created` is a
+# host-wide announcement that this row hears for EVERY preset's sessions. See
 # docs/adr/0001 and docs/adr/0002.
 #
 # A service row here MUST sit inside a group carrying an `isolate` realm.

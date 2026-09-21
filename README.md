@@ -165,9 +165,13 @@ resolved; it skips itself when no dsh install is found (point
   generation is keyed on the composition file's mtime and size, so touch
   `agent.cordis.yml` or restart.
 - **A blank session switched into this preset** is masked through the
-  `tools/change` reconcile path rather than at creation. If the deployment
-  composes no agent-preset roster, that fallback logs a warning and only the
-  creation path applies.
+  `tools/change` reconcile path rather than at creation, and so is an agent
+  announced before its composition resolves.
+- **The mask only ever touches agents the roster reports as this preset's.**
+  `agent/created` is a host-wide announcement — every plugin hears it for every
+  agent published in the process — so the row asks `agentPresets.composedPreset()`
+  before denying anything, and a deployment without that roster service masks
+  nothing rather than risk another preset's session.
 
 ## Development
 

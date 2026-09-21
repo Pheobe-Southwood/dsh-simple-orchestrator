@@ -6,6 +6,12 @@
  * host cannot be made to produce on demand: a platform-absent tool name, a
  * registry that rejects every name, and the `tools/change` re-entry that a
  * preset switch (and `restrict()` itself) triggers.
+ *
+ * One thing this fake CANNOT reproduce is cross-context event dispatch, which
+ * is exactly how the worst bug of this row shipped: `agent/created` is a
+ * host-wide announcement, and the fake delivers it only to listeners registered
+ * on the fake ctx. The roster gate is therefore asserted here explicitly — the
+ * `standard-session` cases below are the contract, not a formality.
  * @module test/mask
  */
 import assert from 'node:assert/strict';
@@ -122,6 +128,40 @@ function assertDenied(harness, agent, names) {
   assert.equal(harness.stateOf(child).calls, 0, 'a worker keeps the full coding toolset');
 }
 
+{
+  // THE REGRESSION THIS FILE EXISTS FOR: `agent/created` is a host-wide
+  // announcement and reaches this row for every agent in the process. A session
+  // of any OTHER preset (standard, creative, a copied one) is a top-level agent
+  // with no subagent origin — the roster answer is the only thing between it and
+  // being masked down to the orchestrator's toolset.
+  const harness = createHarness({ presetOf: () => 'standard' });
+  harness.install();
+  const agent = harness.addAgent({ id: 'standard-session' });
+  harness.emit('agent/created', { agent });
+  assertDenied(harness, agent, []);
+  assert.equal(harness.stateOf(agent).calls, 0, 'a session of another preset must not be masked');
+  assert.deepEqual(harness.warnings, []);
+
+  const creative = harness.addAgent({ id: 'creative-session' });
+  harness.emit('agent/created', { agent: creative });
+  assert.equal(harness.stateOf(creative).calls, 0, 'nor a creative-mode one');
+}
+
+{
+  // An agent announced BEFORE its composition (composedPreset still blank):
+  // the creation path must fail open, and the reconcile — which runs when the
+  // freshly composed scope gains its first tool layer — must finish the job.
+  let running;
+  const harness = createHarness({ presetOf: () => running });
+  harness.install();
+  const agent = harness.addAgent({ id: 'late-composition' });
+  harness.emit('agent/created', { agent });
+  assert.equal(harness.stateOf(agent).calls, 0, 'no roster answer yet means no mask yet');
+  running = PRESET_ID;
+  harness.emit('tools/change', {});
+  assertDenied(harness, agent, DENY);
+}
+
 // ── idempotence: the mask must not chase its own tools/change ───────────────
 
 {
@@ -195,14 +235,15 @@ function assertDenied(harness, agent, names) {
 }
 
 {
-  // A rosterless deployment still gets its orchestrator masked: the
-  // agent/created path deliberately needs no roster lookup.
+  // A rosterless deployment masks nothing on the creation path — failing open
+  // there is the safe direction, since such a deployment has no other presets
+  // to protect but also no way to tell whose agent is whose.
   const harness = createHarness({ roster: false, registry: false });
   harness.install();
   const agent = harness.addAgent();
   harness.emit('agent/created', { agent });
-  assertDenied(harness, agent, DENY);
-  assert.deepEqual(harness.warnings, []);
+  assertDenied(harness, agent, []);
+  assert.deepEqual(harness.warnings, [], 'declining to mask without a roster is not a warning');
 }
 
 {
